@@ -1,7 +1,8 @@
-const express = require('express')
+const express = require('express');
 const router = express.Router();
-const controller = require("../controller/GA.controller")
+const controller = require("../controller/GA.controller");
 
-router.get('/executionGA', controller.executionGA);
+// Đảm bảo đúng hàm, không phải object thường
+router.get('/runGA', controller.runGA);
 
-module.exports = router;
+module.exports = router; 

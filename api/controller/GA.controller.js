@@ -1,42 +1,46 @@
-const GeneticAlgorithm = require("geneticalgorithm");
+const { runGA } = require("../utils/genetic");
+const Training = require("../../models/training.model"); // Import model Training
 
-const executionGA = async (req, res) => {
-    const machines = [
-        { name: "Máy 1", processed: 500 },
-        { name: "Máy 2", processed: 300 },
-        { name: "Máy 3", processed: 200 }
-    ];
+const runGAHandler = async (req, res) => {
+    try {
+        // Lấy toàn bộ dữ liệu từ bảng 'training'
+        const trainingRecords = await Training.findAll();
 
-    const simTime = 1000; // Tổng thời gian mô phỏng (giây)
-    const expectedRate = 2.0; // Mục tiêu: số sản phẩm mỗi giây
+        // Chuyển đổi dữ liệu từ DB về dạng populationData của GA
+        const populationData = trainingRecords.map(record => {
+            let efficiency, proctime;
+            // Giả sử trường Efficiency và ProcTime lưu dưới dạng JSON string. Nếu không, thay đổi logic parse
+            try {
+                efficiency = JSON.parse(record.Efficiency);
+                proctime = JSON.parse(record.ProcTime);
+            } catch (err) {
+                // Nếu không thể parse JSON, có thể là chuỗi được phân tách bởi dấu phẩy
+                efficiency = record.Efficiency.split(',').map(str => parseFloat(str));
+                proctime = record.ProcTime.split(',').map(str => parseFloat(str));
+            }
+            return { efficiency, proctime };
+        });
 
-    const ga = GeneticAlgorithm({
-        mutationFunction: (entity) => {
-            return entity.map(x => Math.max(50, x + (Math.random() - 0.5) * 20));
-        },
-        crossoverFunction: (parent1, parent2) => {
-            let child1 = parent1.map((x, i) => (x + parent2[i]) / 2);
-            let child2 = parent2.map((x, i) => (x * 0.7 + parent1[i] * 0.3));
-            return [child1, child2];
-        },
-        fitnessFunction: (entity) => {
-            let totalProcessed = entity.reduce((sum, x) => sum + (x / simTime), 0);
-            return -Math.abs(totalProcessed - expectedRate);
-        },
-        population: Array.from({ length: 100 }, () => machines.map(m => m.processed))
-    });
+        // Lấy các tham số từ query string nếu có, hoặc dùng giá trị mặc định
+        const generations = req.query.generations ? parseInt(req.query.generations, 10) : 50;
+        const mutationRate = req.query.mutationRate ? parseFloat(req.query.mutationRate) : 0.1;
 
-    for (let i = 0; i < 100; i++) {
-        ga.evolve();
+        // Chạy thuật toán di truyền với dữ liệu lấy từ DB
+        const bestIndividual = runGA(populationData, generations, mutationRate);
+
+        res.json({
+            message: "✅ Genetic Algorithm run successfully",
+            bestIndividual
+        });
+    } catch (error) {
+        console.error("Error in runGAHandler:", error);
+        res.status(500).json({
+            message: "Error retrieving training data from database",
+            error: error.message
+        });
     }
-
-    const bestSolution = ga.best();
-    console.log("🔹 Kết quả tối ưu:", bestSolution);
-
-    return res.json({
-        message: "Kết quả tối ưu của thuật toán GA",
-        bestSolution
-    });
 };
 
-module.exports = { executionGA };
+module.exports = {
+    runGA: runGAHandler
+};
